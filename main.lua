@@ -1,6 +1,5 @@
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
-local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 
@@ -57,7 +56,7 @@ Credits.BackgroundTransparency = 1
 Credits.Parent = Header
 
 local VersionTag = Instance.new("TextLabel")
-VersionTag.Text = "v1.6.64-fix"
+VersionTag.Text = "v1.6.66-Universal"
 VersionTag.Font = Enum.Font.Gotham
 VersionTag.TextSize = 12
 VersionTag.TextColor3 = Color3.fromRGB(180, 180, 180)
@@ -91,33 +90,22 @@ local function CreateMacBtn(color, order, callback)
     Btn.BackgroundColor3 = color
     Btn.LayoutOrder = order
     Btn.Parent = WindowButtons
-
     local BCorn = Instance.new("UICorner")
     BCorn.CornerRadius = UDim.new(1, 0)
     BCorn.Parent = Btn
-
-    if callback then
-        Btn.MouseButton1Click:Connect(callback)
-    end
+    if callback then Btn.MouseButton1Click:Connect(callback) end
     return Btn
 end
 
 local isMinimized = false
 local originalSize = MainFrame.Size
-
 CreateMacBtn(Color3.fromRGB(39, 201, 63), 3)
-
 CreateMacBtn(Color3.fromRGB(255, 189, 46), 2, function()
     isMinimized = not isMinimized
     local targetSize = isMinimized and UDim2.new(0, 550, 0, 45) or originalSize
-    TweenService:Create(MainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-        Size = targetSize
-    }):Play()
+    TweenService:Create(MainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = targetSize}):Play()
 end)
-
-CreateMacBtn(Color3.fromRGB(255, 95, 86), 1, function()
-    ScreenGui:Destroy()
-end)
+CreateMacBtn(Color3.fromRGB(255, 95, 86), 1, function() ScreenGui:Destroy() end)
 
 local Sidebar = Instance.new("Frame")
 Sidebar.Name = "Sidebar"
@@ -197,16 +185,10 @@ local function CreateTab(name, layoutOrder, isLabel)
     TabBtn.MouseButton1Click:Connect(function()
         for _, p in pairs(pages) do p.Visible = false end
         for _, t in pairs(tabs) do 
-            TweenService:Create(t, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
-                BackgroundTransparency = 1,
-                TextColor3 = Color3.fromRGB(170, 170, 170)
-            }):Play()
+            TweenService:Create(t, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {BackgroundTransparency = 1, TextColor3 = Color3.fromRGB(170, 170, 170)}):Play()
         end
         Page.Visible = true
-        TweenService:Create(TabBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
-            BackgroundTransparency = 0,
-            TextColor3 = Color3.fromRGB(255, 255, 255)
-        }):Play()
+        TweenService:Create(TabBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {BackgroundTransparency = 0, TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
     end)
 
     tabs[name] = TabBtn
@@ -217,12 +199,12 @@ local MainFramePage = CreateTab("Main", 1)
 CreateTab("Silent", 2, true)
 local AutoFarmPage  = CreateTab("Auto Farm", 3)
 local MiscPage      = CreateTab("Misc", 4)
-local VisualsPage   = Instance.new("ScrollingFrame")
+local VisualsPage   = CreateTab("Visuals", 5)
 local InfoPage      = CreateTab("Info", 6)
 
 local autoShellEnabled = false
 local speed = 700 
-local collectedTable = {} -- Блэклист
+local collectedTable = {} 
 
 local AutoShellBtn = Instance.new("TextButton")
 AutoShellBtn.Text = "Auto Shell: OFF"
@@ -237,62 +219,59 @@ local BtnCorner = Instance.new("UICorner")
 BtnCorner.CornerRadius = UDim.new(0, 8)
 BtnCorner.Parent = AutoShellBtn
 
--- Базовая валидация: проверяем только физическое состояние и наличие в блэклисте
 local function isValidShell(part)
     if not part or not part.Parent then return false end
-    if collectedTable[part] then return false end -- Если в блэклисте, то скипаем
-    
+    if collectedTable[part] then return false end 
     if part:IsA("BasePart") then
-        if part.Transparency >= 0.95 or part.Size.Magnitude <= 0.1 then
-            return false
-        end
+        if part.Transparency >= 0.95 or part.Size.Magnitude <= 0.1 then return false end
     end
-    
     return true
 end
 
--- Полет на скорости 700 со спамом Touch-интереса
+-- Безопасный клик хитбокса
+local function safeTouch(hrp, targetPart, state)
+    if firetouchinterest then
+        pcall(function() firetouchinterest(hrp, targetPart, state) end)
+    end
+end
+
 local function highSpeedFly(targetPart)
     local player = Players.LocalPlayer
     if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
         local hrp = player.Character.HumanoidRootPart
         
-        local adjustedTarget = targetPart.Position + Vector3.new(0, 1, 0)
+        -- Полет прямо ВНУТРЬ ракушки (смещено на 0 для гарантированного физического столкновения)
+        local adjustedTarget = targetPart.Position
         local distance = (hrp.Position - adjustedTarget).Magnitude
         local duration = distance / speed
         
         local targetCFrame = CFrame.new(adjustedTarget) * CFrame.Angles(hrp.CFrame:ToEulerAnglesXYZ())
-        
-        local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
-        local tween = TweenService:Create(hrp, tweenInfo, {CFrame = targetCFrame})
+        local tween = TweenService:Create(hrp, TweenInfo.new(duration, Enum.EasingStyle.Linear), {CFrame = targetCFrame})
         
         tween:Play()
         
-        if firetouchinterest then
-            task.spawn(function()
-                while tween.PlaybackState == Enum.PlaybackState.Playing do
-                    if not autoShellEnabled or not targetPart or not targetPart.Parent then break end
-                    firetouchinterest(hrp, targetPart, 0)
-                    task.wait(0.01)
-                    firetouchinterest(hrp, targetPart, 1)
-                end
-            end)
-        end
+        task.spawn(function()
+            while tween.PlaybackState == Enum.PlaybackState.Playing do
+                if not autoShellEnabled or not targetPart or not targetPart.Parent then break end
+                safeTouch(hrp, targetPart, 0)
+                task.wait(0.02)
+                safeTouch(hrp, targetPart, 1)
+            end
+        end)
         
         tween.Completed:Wait()
         
-        if firetouchinterest and targetPart and targetPart.Parent then
-            firetouchinterest(hrp, targetPart, 0)
-            task.wait(0.01)
-            firetouchinterest(hrp, targetPart, 1)
+        -- Физическая микро-задержка на точке для слабых читов и телефонов
+        if targetPart and targetPart.Parent then
+            safeTouch(hrp, targetPart, 0)
+            task.wait(0.05) -- Увеличено время ожидания контакта
+            safeTouch(hrp, targetPart, 1)
         end
         
-        -- Вносим ракушку в блэклист навсегда (до общего ресета)
         collectedTable[targetPart] = true
     end
 end
 
--- Поиск ближайшей ракушки
 local function getClosestShell()
     local player = Players.LocalPlayer
     if not (player and player.Character and player.Character:FindFirstChild("HumanoidRootPart")) then return nil end
@@ -301,27 +280,27 @@ local function getClosestShell()
     local closestPart = nil
     local shortestDistance = math.huge
     
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj.Name == "ResourceNode" then
-            local prefab = obj:FindFirstChild("prefab") or obj:FindFirstChild("Prefab")
-            if prefab then
-                local targetPart = nil
-                if prefab:IsA("BasePart") then
-                    targetPart = prefab
-                elseif prefab:IsA("Model") then
-                    targetPart = prefab.PrimaryPart or prefab:FindFirstChildWhichIsA("BasePart")
-                end
-                
-                if targetPart and isValidShell(targetPart) then
-                    local distance = (hrp.Position - targetPart.Position).Magnitude
-                    if distance < shortestDistance then
-                        shortestDistance = distance
-                        closestPart = targetPart
+    -- pcall защищает от лагов прогрузки StreamingEnabled
+    pcall(function()
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj.Name == "ResourceNode" then
+                local prefab = obj:FindFirstChild("prefab") or obj:FindFirstChild("Prefab")
+                if prefab then
+                    local targetPart = nil
+                    if prefab:IsA("BasePart") then targetPart = prefab
+                    elseif prefab:IsA("Model") then targetPart = prefab.PrimaryPart or prefab:FindFirstChildWhichIsA("BasePart") end
+                    
+                    if targetPart and isValidShell(targetPart) then
+                        local distance = (hrp.Position - targetPart.Position).Magnitude
+                        if distance < shortestDistance then
+                            shortestDistance = distance
+                            closestPart = targetPart
+                        end
                     end
                 end
             end
         end
-    end
+    end)
     return closestPart
 end
 
@@ -337,22 +316,15 @@ AutoShellBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Цикл полета + проверка на полный ресет блэклиста
 task.spawn(function()
     while task.wait(0.02) do
         if autoShellEnabled then
             local target = getClosestShell()
-            
-            -- ЕСЛИ ЦЕЛЕЙ НЕТ (все ракушки на карте занесены в блэклист)
             if not target then
-                table.clear(collectedTable) -- Ресетаем блэклист под ноль
-                target = getClosestShell()   -- Пробуем найти цель снова на новом круге
+                table.clear(collectedTable)
+                target = getClosestShell()   
             end
-            
-            -- Если после ресета или изначально цель найдена — летим к ней
-            if target then
-                highSpeedFly(target)
-            end
+            if target then highSpeedFly(target) end
         end
     end
 end)
